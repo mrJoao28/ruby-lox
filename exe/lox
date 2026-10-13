@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+require_relative "../lib/lox"
+
+path = ARGV[0]
+abort "Uso: ruby exe/lox arquivo.lox" unless path
+
+scanner = Lox::Scanner.new(File.read(path))
+tokens = scanner.scan_tokens
+
+scanner.errors.each do |error|
+  warn "[linha #{error[:line]}] Erro: #{error[:message]}"
+end
+
+tokens.each { |token| puts token }
