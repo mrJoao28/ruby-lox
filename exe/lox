@@ -1,14 +1,37 @@
 #!/usr/bin/env ruby
 require_relative "../lib/lox"
 
-path = ARGV[0]
-abort "Uso: ruby exe/lox arquivo.lox" unless path
+def run(source, tokens_only: false)
+  scanner = Lox::Scanner.new(source)
+  tokens = scanner.scan_tokens
+  scanner.errors.each { |error| warn "[linha #{error[:line]}] Erro: #{error[:message]}" }
+  return false if scanner.errors.any?
 
-scanner = Lox::Scanner.new(File.read(path))
-tokens = scanner.scan_tokens
+  if tokens_only
+    tokens.each { |token| puts token }
+    return true
+  end
 
-scanner.errors.each do |error|
-  warn "[linha #{error[:line]}] Erro: #{error[:message]}"
+  parser = Lox::Parser.new(tokens)
+  expr = parser.parse
+  parser.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
+  return false unless expr
+
+  puts Lox::AstPrinter.new.render(expr)
+  true
 end
 
-tokens.each { |token| puts token }
+tokens_only = !ARGV.delete("--tokens").nil?
+path = ARGV.first
+
+if path
+  exit(run(File.read(path), tokens_only:) ? 0 : 65)
+else
+  loop do
+    print "> "
+    line = $stdin.gets
+    break if line.nil?
+
+    run(line.chomp, tokens_only:)
+  end
+end
