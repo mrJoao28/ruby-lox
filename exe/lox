@@ -3,7 +3,7 @@ require_relative "../lib/lox"
 
 # Executa o código-fonte e devolve o código de saída:
 # 0 = ok, 65 = erro de sintaxe, 70 = erro de execução.
-def run(source, mode: :eval)
+def run(source, interpreter:, mode: :eval, repl: false)
   scanner = Lox::Scanner.new(source)
   tokens = scanner.scan_tokens
   scanner.errors.each { |error| warn "[linha #{error[:line]}] Erro: #{error[:message]}" }
@@ -14,38 +14,49 @@ def run(source, mode: :eval)
     return 0
   end
 
-  parser = Lox::Parser.new(tokens)
-  expr = parser.parse
-  parser.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
-  return 65 unless expr
+  statements = parse_statements(tokens, repl:)
+  return 65 unless statements
 
   if mode == :ast
-    puts Lox::AstPrinter.new.render(expr)
+    statements.each { |statement| puts Lox::AstPrinter.new.render(statement) }
     return 0
   end
 
-  interpreter = Lox::Interpreter.new
-  output = interpreter.interpret(expr)
-  interpreter.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
-  return 70 unless output
+  return 0 if interpreter.interpret(statements)
 
-  puts output
-  0
+  interpreter.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
+  70
+end
+
+# Devolve a lista de instruções, ou nil se houve erro de sintaxe.
+# No REPL, uma expressão solta (sem ';') também é aceita e o valor é impresso.
+def parse_statements(tokens, repl:)
+  if repl
+    expression_parser = Lox::Parser.new(tokens)
+    expr = expression_parser.parse_expression
+    return [Lox::Stmt::Print.new(expression: expr)] if expr && expression_parser.errors.empty?
+  end
+
+  parser = Lox::Parser.new(tokens)
+  statements = parser.parse
+  parser.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
+  parser.errors.empty? ? statements : nil
 end
 
 mode = :eval
 mode = :tokens if ARGV.delete("--tokens")
 mode = :ast if ARGV.delete("--ast")
 path = ARGV.first
+interpreter = Lox::Interpreter.new
 
 if path
-  exit run(File.read(path), mode:)
+  exit run(File.read(path), interpreter:, mode:)
 else
   loop do
     print "> "
     line = $stdin.gets
     break if line.nil?
 
-    run(line.chomp, mode:)
+    run(line.chomp, interpreter:, mode:, repl: true)
   end
 end

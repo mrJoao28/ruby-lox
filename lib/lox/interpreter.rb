@@ -1,31 +1,27 @@
 module Lox
-  # Interpretador "tree-walking": percorre a AST e calcula o resultado.
+  # Interpretador "tree-walking": percorre a AST e executa o programa.
   #
   # Valores da Lox são representados por tipos do próprio Ruby:
   #   número => Float | string => String | booleano => true/false | nil => nil
   class Interpreter
-    class LoxRuntimeError < StandardError
-      attr_reader :token
-
-      def initialize(token, message)
-        super(message)
-        @token = token
-      end
-    end
-
     attr_reader :errors
 
-    def initialize
+    # `output` é para onde o `print` escreve (nos testes, um StringIO).
+    def initialize(output: $stdout)
+      @output = output
+      @environment = Environment.new # escopo global
       @errors = []
     end
 
-    # Avalia a expressão e devolve o resultado como texto (ou nil se houve
-    # erro de execução, que fica registrado em #errors).
-    def interpret(expr)
-      stringify(evaluate(expr))
+    # Executa as instruções. Devolve true se tudo deu certo, false se houve
+    # erro de execução (que fica registrado em #errors).
+    def interpret(statements)
+      @errors = []
+      statements.each { |statement| execute(statement) }
+      true
     rescue LoxRuntimeError => e
       @errors << { line: e.token.line, message: "Erro de execução: #{e.message}" }
-      nil
+      false
     end
 
     def evaluate(expr)
@@ -38,10 +34,46 @@ module Lox
         evaluate_unary(operator, evaluate(right))
       in Expr::Binary(left:, operator:, right:)
         evaluate_binary(operator, evaluate(left), evaluate(right))
+      in Expr::Variable(name:)
+        @environment.get(name)
+      in Expr::Assign(name:, value:)
+        result = evaluate(value)
+        @environment.assign(name, result)
+        result
       end
     end
 
     private
+
+    # --- instruções ---
+
+    def execute(statement)
+      case statement
+      in Stmt::Expression(expression:)
+        evaluate(expression)
+      in Stmt::Print(expression:)
+        @output.puts(stringify(evaluate(expression)))
+      in Stmt::Var(name:, initializer:)
+        value = initializer.nil? ? nil : evaluate(initializer)
+        @environment.define(name.lexeme, value)
+      in Stmt::Block(statements:)
+        execute_block(statements, Environment.new(@environment))
+      end
+
+      nil
+    end
+
+    # Executa as instruções num escopo novo e SEMPRE volta ao escopo anterior,
+    # mesmo que aconteça um erro no meio do bloco.
+    def execute_block(statements, environment)
+      previous = @environment
+      @environment = environment
+      statements.each { |statement| execute(statement) }
+    ensure
+      @environment = previous
+    end
+
+    # --- expressões ---
 
     def evaluate_unary(operator, right)
       case operator.type

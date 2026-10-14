@@ -1,9 +1,10 @@
 require "test_helper"
+require "stringio"
 
 class InterpreterTest < Minitest::Test
   def parse(source)
     tokens = Lox::Scanner.new(source).scan_tokens
-    Lox::Parser.new(tokens).parse
+    Lox::Parser.new(tokens).parse_expression
   end
 
   # Devolve o valor Ruby da expressão.
@@ -13,9 +14,10 @@ class InterpreterTest < Minitest::Test
 
   # Devolve [texto, erros], como o executável faz.
   def interpret(source)
-    interpreter = Lox::Interpreter.new
-    output = interpreter.interpret(parse(source))
-    [output, interpreter.errors]
+    out = StringIO.new
+    interpreter = Lox::Interpreter.new(output: out)
+    ok = interpreter.interpret([Lox::Stmt::Print.new(expression: parse(source))])
+    [ok ? out.string.chomp : nil, interpreter.errors]
   end
 
   def test_arithmetic_respects_precedence

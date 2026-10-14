@@ -4,7 +4,7 @@ class ParserTest < Minitest::Test
   def parse(source)
     tokens = Lox::Scanner.new(source).scan_tokens
     parser = Lox::Parser.new(tokens)
-    [parser.parse, parser.errors]
+    [parser.parse_expression, parser.errors]
   end
 
   def ast(source)

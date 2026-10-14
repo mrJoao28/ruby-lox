@@ -1,0 +1,10 @@
+var a = "global";
+var b = "global b";
+{
+  var a = "local";
+  print a;
+  print b;
+  b = "alterada por dentro";
+}
+print a;
+print b;
