@@ -1,37 +1,51 @@
 #!/usr/bin/env ruby
 require_relative "../lib/lox"
 
-def run(source, tokens_only: false)
+# Executa o código-fonte e devolve o código de saída:
+# 0 = ok, 65 = erro de sintaxe, 70 = erro de execução.
+def run(source, mode: :eval)
   scanner = Lox::Scanner.new(source)
   tokens = scanner.scan_tokens
   scanner.errors.each { |error| warn "[linha #{error[:line]}] Erro: #{error[:message]}" }
-  return false if scanner.errors.any?
+  return 65 if scanner.errors.any?
 
-  if tokens_only
+  if mode == :tokens
     tokens.each { |token| puts token }
-    return true
+    return 0
   end
 
   parser = Lox::Parser.new(tokens)
   expr = parser.parse
   parser.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
-  return false unless expr
+  return 65 unless expr
 
-  puts Lox::AstPrinter.new.render(expr)
-  true
+  if mode == :ast
+    puts Lox::AstPrinter.new.render(expr)
+    return 0
+  end
+
+  interpreter = Lox::Interpreter.new
+  output = interpreter.interpret(expr)
+  interpreter.errors.each { |error| warn "[linha #{error[:line]}] #{error[:message]}" }
+  return 70 unless output
+
+  puts output
+  0
 end
 
-tokens_only = !ARGV.delete("--tokens").nil?
+mode = :eval
+mode = :tokens if ARGV.delete("--tokens")
+mode = :ast if ARGV.delete("--ast")
 path = ARGV.first
 
 if path
-  exit(run(File.read(path), tokens_only:) ? 0 : 65)
+  exit run(File.read(path), mode:)
 else
   loop do
     print "> "
     line = $stdin.gets
     break if line.nil?
 
-    run(line.chomp, tokens_only:)
+    run(line.chomp, mode:)
   end
 end
